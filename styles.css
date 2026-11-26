@@ -10,6 +10,7 @@
   --sea: #dce9ef;
   --accent: #c8102e;
   --open: #007a43;
+  --fx-up: #d0112b; --fx-down: #1a5fd0; /* 환율 상승 red, 하락 blue */
   --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   /* one line colour per day, rail-map style */
@@ -20,12 +21,14 @@
   :root:not([data-theme="light"]) {
     --paper: #15181a; --card: #1e2225; --ink: #eef0ee; --muted: #a2a9ad;
     --rule: #30363a; --soft: #262b2e; --land: #22272a; --sea: #1a2a33; --accent: #ff5a6e; --open: #5fd39a;
+    --fx-up: #ff6b78; --fx-down: #6ea8ff;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --paper: #15181a; --card: #1e2225; --ink: #eef0ee; --muted: #a2a9ad;
   --rule: #30363a; --soft: #262b2e; --land: #22272a; --sea: #1a2a33; --accent: #ff5a6e; --open: #5fd39a;
+  --fx-up: #ff6b78; --fx-down: #6ea8ff;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -121,6 +124,30 @@ button { font: inherit; color: inherit; }
   .nearby-bar { display: grid; gap: 4px; }
   .nearby-bar > .nearby-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .nearby-bar .nearby-chip { justify-content: center; gap: 4px; min-height: 44px; padding-inline: 3px; font-size: clamp(11px, 3.2vw, 13px); }
+}
+/* ── 엔화 환율 bar: rate + a one-field yen→won converter ── */
+.fx-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-block: -14px -8px; min-width: 0; }
+.fx-bar[hidden] { display: none; }
+.fx-rate { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; min-width: 0; }
+.fx-rate b { font: 600 15px var(--font-mono); white-space: nowrap; }
+.fx-chg { font: 600 13px var(--font-mono); white-space: nowrap; color: var(--muted); }
+/* 상승 red, 하락 blue: the rate and its change both take the colour */
+.fx-bar[data-dir="up"] :is(#fx-rate, .fx-chg) { color: var(--fx-up); }
+.fx-bar[data-dir="down"] :is(#fx-rate, .fx-chg) { color: var(--fx-down); }
+.fx-chg-lbl { margin-right: 4px; font: 500 12px var(--font-body); color: var(--muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.fx-at { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.fx-calc { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 999px; background: var(--card); font-family: var(--font-mono); font-size: 14px; }
+.fx-calc:focus-within { border-color: var(--ink); }
+.fx-calc input { width: 9ch; min-width: 0; border: 0; padding: 0; background: none; color: var(--ink); font: inherit; font-size: 16px; outline: none; }
+.fx-calc input::placeholder { font-family: var(--font-body); font-size: 13px; color: var(--muted); }
+.fx-calc output { font-weight: 600; white-space: nowrap; }
+.fx-calc output:empty { display: none; }
+@media (max-width: 559px) {
+  .fx-bar { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 4px 8px; }
+  .fx-calc { grid-column: 1 / -1; min-height: 44px; }
+  .fx-chg-lbl { display: none; }
+  .fx-calc input { flex: 1; }
 }
 /* ── overview strip ── */
 .ov-scroll { overflow-x: auto; padding-bottom: 4px; }

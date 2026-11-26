@@ -32,6 +32,11 @@
   </div>
   <button type="button" class="theme-btn" id="theme-toggle" aria-label="다크 모드로 바꾸기"></button>
 </header>
+<section class="fx-bar" id="fx" aria-label="엔화 환율" hidden>
+  <span class="nearby-lbl">환율</span>
+  <span class="fx-rate"><b id="fx-rate"></b><span class="fx-chg" id="fx-chg" hidden></span><span class="fx-at" id="fx-at"></span></span>
+  <label class="fx-calc"><span aria-hidden="true">¥</span><input id="fx-yen" type="text" inputmode="numeric" autocomplete="off" placeholder="엔화 금액" aria-label="엔화 금액"><output id="fx-won" for="fx-yen" aria-live="polite"></output></label>
+</section>
 <section class="nearby-bar" aria-label="지금 근처 빠르게 찾기">
   <span class="nearby-lbl">지금 근처</span>
   <div class="nearby-chips" id="nearby-chips"></div>
@@ -172,7 +177,7 @@
     <p class="note">체크인 시간과 짐 보관 가능 여부는 호스트에게 확인하세요.</p>
   </div>
 </section>
-<p class="note">날씨 예보: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0)</p>
+<p class="note">날씨 예보: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0)<br>환율: Yahoo Finance, <a href="https://frankfurter.dev" target="_blank" rel="noopener">Frankfurter</a>(ECB), <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a> · 참고용 시세로, 실제 환전·카드 결제 금액과는 달라요</p>
 </div>
 <dialog id="place-dialog" class="place-dialog" lang="ko" aria-labelledby="place-title">
   <!-- autofocus target: showModal() would otherwise focus the first button and draw the focus ring -->
@@ -1672,6 +1677,59 @@
       .catch(function (err) { console.error('weather failed', err); weatherFailed = !weather; weatherAt = 0; })
       .then(function () { renderWeather(); renderTimeline(); });
   }
+  // ── 엔화 환율: /api/rate (won per yen, edge-cached 5 min); a nicety like the weather, so the bar stays hidden until a rate arrives ──
+  var fxRate = 0;
+  var fxPrev = null; // the previous day's rate from the same source, or null when it has none
+  var fxAt = 0;
+  var fxDaily = false; // a once-a-day rate: show its date, not a clock time
+  var fxBusy = false;
+  function wonText(yenAmount, rate) { return Math.round(yenAmount * rate).toLocaleString('ko-KR') + '원'; }
+  function won2(v) { return v.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  // 전일 대비, per 100엔: up (red) / down (blue) / flat, as Korean quote boards colour them
+  function fxChange(rate, prev) {
+    if (!(prev > 0)) return null;
+    var diff = Math.round((rate - prev) * 10000) / 100;
+    var pct = Math.round((rate / prev - 1) * 10000) / 100;
+    if (!diff) return { dir: 'flat', word: '보합', mark: '-', text: '0.00원 (0.00%)' };
+    var up = diff > 0;
+    return { dir: up ? 'up' : 'down', word: up ? '상승' : '하락', mark: up ? '▲' : '▼',
+      text: won2(Math.abs(diff)) + '원 (' + (up ? '+' : '−') + won2(Math.abs(pct)) + '%)' };
+  }
+  function renderFx() {
+    document.getElementById('fx-rate').textContent = '100엔 = ' + won2(fxRate * 100) + '원';
+    var chg = fxChange(fxRate, fxPrev);
+    var chgEl = document.getElementById('fx-chg');
+    chgEl.hidden = !chg;
+    document.getElementById('fx').dataset.dir = chg ? chg.dir : '';
+    if (chg) {
+      chgEl.title = '전일 대비 ' + chg.word;
+      chgEl.innerHTML = '<span class="fx-chg-lbl">전일 대비</span><span class="sr"> ' + chg.word + '</span><span aria-hidden="true">' + chg.mark + '</span> ' + chg.text;
+    }
+    var at = {};
+    new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(fxAt).forEach(function (part) { at[part.type] = part.value; });
+    document.getElementById('fx-at').textContent = at.month + '/' + at.day + (fxDaily ? '' : ' ' + at.hour + ':' + at.minute) + ' 기준'; // Seoul and Tokyo share the clock
+    var yenAmount = Number(document.getElementById('fx-yen').value.replace(/\D/g, ''));
+    document.getElementById('fx-won').textContent = yenAmount ? '≈ ' + wonText(yenAmount, fxRate) : '';
+    document.getElementById('fx').hidden = false;
+  }
+  var fxCheckedAt = 0;
+  function loadFx() {
+    if (fxBusy) return;
+    fxBusy = true;
+    fxCheckedAt = Date.now();
+    fetch('/api/rate', { signal: AbortSignal.timeout(15000) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (q) { if (!(q.rate > 0)) throw new Error('bad rate'); fxRate = q.rate; fxPrev = q.prev; fxAt = q.at; fxDaily = !!q.daily; renderFx(); })
+      // a rate already on screen stays; the next refresh tries again
+      .catch(function (err) { console.error('rate failed', err); })
+      .then(function () { fxBusy = false; });
+  }
+  document.getElementById('fx-yen').addEventListener('input', function (e) {
+    var digits = e.target.value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 9);
+    e.target.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+    if (fxRate) renderFx();
+  });
   // small forecast under a timeline row's time
   function rowWeather(label) {
     var f = weather && rowForecast(current, label, weather);
@@ -1830,6 +1888,10 @@
   document.addEventListener('visibilitychange', renderBadge); // a tab left open overnight catches up when it is looked at again
   loadWeather();
   document.addEventListener('visibilitychange', function () { if (!document.hidden && Date.now() - weatherAt > 3600000) loadWeather(); }); // forecasts move slowly: once an hour at most
+  loadFx();
+  // the rate moves through the day: every 5 minutes while the tab is looked at, and right away when it comes back after that
+  setInterval(function () { if (!document.hidden) loadFx(); }, 300000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && Date.now() - fxCheckedAt > 300000) loadFx(); });
   autoStart = !fromHash();
   current = fromHash() || today();
   render();

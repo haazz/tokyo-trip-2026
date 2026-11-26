@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node places.check.mjs && node places-ui.check.mjs && node timeline.check.mjs && node settle.check.mjs"
+    "check": "node places.check.mjs && node places-ui.check.mjs && node timeline.check.mjs && node settle.check.mjs && node rate.check.mjs"
   },
   "dependencies": {
     "@upstash/redis": "^1.34.0"
